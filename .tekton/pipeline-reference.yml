@@ -1,0 +1,112 @@
+---
+# Reference Pipeline YAML
+# This file shows the structure of the pipeline that should be created in OpenShift Console
+# You can use this as a reference, but create the pipeline through the OpenShift Console UI
+
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: ci-cd-pipeline
+spec:
+  params:
+    - name: app-name
+      description: Application name for deployment
+      type: string
+      default: "counter-service"
+    - name: build-image
+      description: Image name to build and deploy
+      type: string
+      default: "image-registry.openshift-image-registry.svc:5000/<namespace>/counter-service:latest"
+    - name: git-url
+      description: Git repository URL
+      type: string
+    - name: git-revision
+      description: Git revision/branch
+      type: string
+      default: "main"
+  workspaces:
+    - name: output
+      description: Workspace for source code and build artifacts
+  tasks:
+    # Step 1: Cleanup workspace
+    - name: cleanup
+      taskRef:
+        name: cleanup
+      workspaces:
+        - name: source
+          workspace: output
+    
+    # Step 2: Clone repository
+    - name: git-clone
+      taskRef:
+        name: git-clone
+        kind: ClusterTask
+      params:
+        - name: url
+          value: $(params.git-url)
+        - name: revision
+          value: $(params.git-revision)
+      workspaces:
+        - name: output
+          workspace: output
+      runAfter:
+        - cleanup
+    
+    # Step 3: Run ESLint
+    - name: eslint-lint
+      taskRef:
+        name: eslint
+      workspaces:
+        - name: source
+          workspace: output
+      runAfter:
+        - git-clone
+    
+    # Step 4: Run Jest tests
+    - name: jest-tests
+      taskRef:
+        name: jest-test
+      workspaces:
+        - name: source
+          workspace: output
+      runAfter:
+        - eslint-lint
+    
+    # Step 5: Build container image
+    - name: buildah-build
+      taskRef:
+        name: buildah
+        kind: ClusterTask
+      params:
+        - name: IMAGE
+          value: $(params.build-image)
+        - name: DOCKERFILE
+          value: ./Dockerfile
+        - name: CONTEXT
+          value: $(workspaces.output.path)
+      workspaces:
+        - name: source
+          workspace: output
+      runAfter:
+        - jest-tests
+    
+    # Step 6: Deploy to OpenShift
+    - name: deploy-app
+      taskRef:
+        name: openshift-client
+        kind: ClusterTask
+      params:
+        - name: SCRIPT
+          value: |
+            oc create deployment $(params.app-name) --image=$(params.build-image) --dry-run=client -o yaml | oc apply -f -
+        - name: ARGS
+          value:
+            - create
+            - deployment
+            - $(params.app-name)
+            - --image=$(params.build-image)
+            - --dry-run=client
+            - -o
+            - yaml
+      runAfter:
+        - buildah-build

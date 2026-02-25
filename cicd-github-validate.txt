@@ -1,0 +1,22 @@
+GitHub Actions Workflow Validation Output
+==========================================
+
+To generate this output, run the following commands in your terminal:
+
+1. gh run list
+   (This will show all workflow runs with their IDs)
+
+2. gh run view <run-id>
+   (Replace <run-id> with an ID from the list above)
+
+3. gh run view <run-id> --verbose
+   (For detailed output)
+
+Note: Make sure you have:
+- Installed GitHub CLI (gh): https://cli.github.com/
+- Authenticated using: gh auth login
+- Pushed your workflow.yml changes to GitHub
+- The workflow has run at least once
+
+After running the commands, paste the output below:
+----------------------------------------------------
